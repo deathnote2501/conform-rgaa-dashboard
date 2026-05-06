@@ -2,6 +2,7 @@ import { getKpis, getMairies, SORT_KEYS, type SortKey } from "@/lib/db";
 import {
   Database, Send, Activity, ShieldCheck, ExternalLink, Mail, Search,
   ChevronLeft, ChevronRight, ArrowUp, ArrowDown, ArrowUpDown, Globe, FileText,
+  Check, Minus,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -121,6 +122,8 @@ export default async function Page({ searchParams }: Props) {
                   <th><a className="sortable" href={sortHref("email")}><span>Email</span><SortIcon col="email" /></a></th>
                   <th><a className="sortable" href={sortHref("site_url")}><span>Site</span><SortIcon col="site_url" /></a></th>
                   <th><a className="sortable" href={sortHref("rgaa_status")}><span>RGAA</span><SortIcon col="rgaa_status" /></a></th>
+                  <th><span className="th-static">Footer</span></th>
+                  <th><span className="th-static">Page dédiée</span></th>
                   <th><a className="sortable" href={sortHref("contacted_at")}><span>Envoyé</span><SortIcon col="contacted_at" /></a></th>
                   <th><a className="sortable" href={sortHref("template_used")}><span>Template</span><SortIcon col="template_used" /></a></th>
                 </tr>
@@ -147,16 +150,24 @@ export default async function Page({ searchParams }: Props) {
                     </td>
                     <td>
                       {r.rgaa_status ? (
-                        <a
-                          href={r.rgaa_page_url || r.site_url || "#"}
-                          target={r.rgaa_page_url || r.site_url ? "_blank" : undefined}
-                          rel="noopener noreferrer"
-                          className={r.rgaa_page_url ? "link-cell" : ""}
-                          style={r.rgaa_page_url ? undefined : { pointerEvents: "none" }}
-                        >
-                          <span className={`badge rgaa-${r.rgaa_status}`}>
-                            {STATUS_LABEL[r.rgaa_status] ?? r.rgaa_status}
-                          </span>
+                        <span className={`badge rgaa-${r.rgaa_status}`}>
+                          {STATUS_LABEL[r.rgaa_status] ?? r.rgaa_status}
+                        </span>
+                      ) : <span className="dash">—</span>}
+                    </td>
+                    <td className="center-cell">
+                      {r.rgaa_in_footer === true ? (
+                        <Check size={14} className="check-yes" />
+                      ) : r.rgaa_in_footer === false ? (
+                        <Minus size={14} className="check-no" />
+                      ) : <span className="dash">—</span>}
+                    </td>
+                    <td>
+                      {r.rgaa_page_url ? (
+                        <a href={r.rgaa_page_url} target="_blank" rel="noopener noreferrer" className="link-cell">
+                          <Check size={12} className="check-yes" />
+                          <span className="truncate">{shortPath(r.rgaa_page_url)}</span>
+                          <ExternalLink size={11} />
                         </a>
                       ) : <span className="dash">—</span>}
                     </td>
@@ -189,6 +200,13 @@ export default async function Page({ searchParams }: Props) {
 
 function shortHost(url: string): string {
   try { return new URL(url).host.replace(/^www\./, ""); } catch { return url.slice(0, 40); }
+}
+
+function shortPath(url: string): string {
+  try {
+    const u = new URL(url);
+    return (u.pathname.replace(/\/$/, "") || u.host.replace(/^www\./, "")).slice(0, 36);
+  } catch { return url.slice(0, 36); }
 }
 
 function cleanName(n: string): string {

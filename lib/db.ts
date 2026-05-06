@@ -83,6 +83,7 @@ export type MairieRow = {
   site_url: string | null;
   rgaa_status: string | null;
   rgaa_page_url: string | null;
+  rgaa_in_footer: boolean | null;
   contacted_at: string | null;
   template_used: string | null;
   replied_at: string | null;
@@ -107,7 +108,7 @@ export type Filters = {
   pageSize?: number;
 };
 
-const COLUMNS = "code_insee,nom,email,site_url,rgaa_status,rgaa_page_url,contacted_at,template_used,replied_at,bounced_at";
+const COLUMNS = "code_insee,nom,email,site_url,rgaa_status,rgaa_page_url,rgaa_in_footer,contacted_at,template_used,replied_at,bounced_at";
 
 export async function getMairies(f: Filters): Promise<{ rows: MairieRow[]; total: number; page: number; pageSize: number }> {
   const c = client();
