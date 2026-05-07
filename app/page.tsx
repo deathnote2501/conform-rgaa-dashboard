@@ -112,6 +112,8 @@ export default async function Page({ searchParams }: Props) {
         <Kpi color="green"  icon={<BadgeCheck size={20} />}    label="Conformes"      value={kpis.status_tot}       sub={`${pct(kpis.status_tot, kpis.tested)}% des testées`} />
         <Kpi color="yellow" icon={<AlertTriangle size={20} />} label="Partiellement"  value={kpis.status_part}      sub={`${pct(kpis.status_part, kpis.tested)}% des testées`} />
         <Kpi color="red"    icon={<Activity size={20} />}      label="Non conformes"  value={kpis.status_non}       sub={`${pct(kpis.status_non, kpis.tested)}% des testées`} />
+        <Kpi color="muted"  icon={<FlaskConical size={20} />}  label="Audités 44 crit." value={kpis.audit_done}     sub={`${pct(kpis.audit_done, kpis.with_site)}% des sites`} />
+        <Kpi color={scoreColor(kpis.audit_avg_score)} icon={<BadgeCheck size={20} />} label="Score moyen" value={kpis.audit_avg_score} suffix="%" sub={`conf=${kpis.audit_conforme} part=${kpis.audit_partiel} nc=${kpis.audit_non_conforme}`} />
         <Kpi color="yellow" icon={<FileText size={20} />}      label="Pool envoi"     value={kpis.send_pool}        sub="non_conforme + partiellement, non contactés" />
         <Kpi color="green"  icon={<Send size={20} />}          label="Envoyés"        value={kpis.contacted_total}  sub={`aujourd'hui : ${kpis.contacted_today}/10`} />
       </div>
@@ -157,6 +159,7 @@ export default async function Page({ searchParams }: Props) {
                   <th><a className="sortable" href={sortHref("email")}><span>Email</span><SortIcon col="email" /></a></th>
                   <th><a className="sortable" href={sortHref("site_url")}><span>Site</span><SortIcon col="site_url" /></a></th>
                   <th><a className="sortable" href={sortHref("rgaa_status")}><span>RGAA</span><SortIcon col="rgaa_status" /></a></th>
+                  <th><span className="th-static">Score</span></th>
                   <th><span className="th-static">Footer</span></th>
                   <th><span className="th-static">Page dédiée</span></th>
                   <th><a className="sortable" href={sortHref("contacted_at")}><span>Envoyé</span><SortIcon col="contacted_at" /></a></th>
@@ -189,6 +192,17 @@ export default async function Page({ searchParams }: Props) {
                           {STATUS_LABEL[r.rgaa_status] ?? r.rgaa_status}
                         </span>
                       ) : <span className="dash">—</span>}
+                    </td>
+                    <td>
+                      {r.audit_score_pct === null ? (
+                        <span className="dash">—</span>
+                      ) : r.audit_conformity === "erreur" ? (
+                        <span className="badge rgaa-aucune_mention">erreur</span>
+                      ) : (
+                        <span className={`badge rgaa-${scoreBadgeClass(r.audit_conformity)}`}>
+                          {r.audit_score_pct}%
+                        </span>
+                      )}
                     </td>
                     <td className="center-cell">
                       {r.rgaa_in_footer === true ? (
@@ -238,6 +252,19 @@ function pct(part: number, whole: number): string {
   return ((part / whole) * 100).toFixed(1);
 }
 
+function scoreColor(score: number): "green" | "yellow" | "red" {
+  if (score >= 80) return "green";
+  if (score >= 50) return "yellow";
+  return "red";
+}
+
+function scoreBadgeClass(conformity: string | null): string {
+  if (conformity === "conforme") return "totalement";
+  if (conformity === "partiel") return "partiellement";
+  if (conformity === "non_conforme") return "non_conforme";
+  return "aucune_mention";
+}
+
 function shortHost(url: string): string {
   try { return new URL(url).host.replace(/^www\./, ""); } catch { return url.slice(0, 40); }
 }
@@ -254,16 +281,17 @@ function cleanName(n: string): string {
   return n.replace(/^Mairie(?:\s+d[ée]l[ée]gu[ée]e?)?\s*-\s*/i, "");
 }
 
-function Kpi({ icon, label, value, sub, color }: {
+function Kpi({ icon, label, value, sub, color, suffix }: {
   icon: React.ReactNode; label: string; value: number; sub?: string;
   color: "blue" | "yellow" | "green" | "red" | "muted";
+  suffix?: string;
 }) {
   return (
     <div className={`kpi icon-${color}`}>
       <span className="icon">{icon}</span>
       <div className="body">
         <div className="label">{label}</div>
-        <div className="value">{value.toLocaleString("fr-FR")}</div>
+        <div className="value">{value.toLocaleString("fr-FR")}{suffix ?? ""}</div>
         {sub ? <div className="sub">{sub}</div> : null}
       </div>
     </div>

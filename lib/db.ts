@@ -21,6 +21,41 @@ async function countMairies(filter?: (q: any) => any): Promise<number> {
   if (error) throw error;
   return count ?? 0;
 }
+
+async function countLatestAudits(filter?: (q: any) => any): Promise<number> {
+  const c = client();
+  let q: any = c.from("mairie_latest_audit").select("*", { count: "exact", head: true });
+  if (filter) q = filter(q);
+  const { count, error } = await q;
+  if (error) throw error;
+  return count ?? 0;
+}
+
+async function avgLatestAuditScore(): Promise<number> {
+  const c = client();
+  const PAGE = 1000;
+  let from = 0;
+  let sum = 0;
+  let n = 0;
+  // Paginate through mairie_latest_audit, summing score_pct (skip nulls).
+  // The view holds at most ~21k rows (1 per audited mairie), so this is bounded.
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const { data, error } = await c
+      .from("mairie_latest_audit")
+      .select("score_pct")
+      .not("score_pct", "is", null)
+      .range(from, from + PAGE - 1);
+    if (error) throw error;
+    const rows = (data as { score_pct: number | null }[]) ?? [];
+    for (const r of rows) {
+      if (r.score_pct != null) { sum += r.score_pct; n += 1; }
+    }
+    if (rows.length < PAGE) break;
+    from += PAGE;
+  }
+  return n === 0 ? 0 : Math.round(sum / n);
+}
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 export type Kpis = {
@@ -37,6 +72,12 @@ export type Kpis = {
   send_pool: number;
   contacted_today: number;
   contacted_total: number;
+  audit_done: number;
+  audit_avg_score: number;
+  audit_conforme: number;
+  audit_partiel: number;
+  audit_non_conforme: number;
+  audit_erreur: number;
 };
 
 export async function getKpis(): Promise<Kpis> {
@@ -50,6 +91,8 @@ export async function getKpis(): Promise<Kpis> {
     total, with_email, with_site, scrape_pending, tested,
     status_non, status_part, status_tot, status_aucune, status_error,
     send_pool, contacted_today, contacted_total,
+    audit_done, audit_avg_score,
+    audit_conforme, audit_partiel, audit_non_conforme, audit_erreur,
   ] = await Promise.all([
     countMairies(),
     countMairies((q) => q.not("email", "is", null)),
@@ -69,12 +112,20 @@ export async function getKpis(): Promise<Kpis> {
     ),
     countMairies((q) => q.gte("contacted_at", todayUtc)),
     countMairies((q) => q.not("contacted_at", "is", null)),
+    countLatestAudits((q) => q.not("score_pct", "is", null)),
+    avgLatestAuditScore(),
+    countLatestAudits((q) => q.eq("conformity", "conforme")),
+    countLatestAudits((q) => q.eq("conformity", "partiel")),
+    countLatestAudits((q) => q.eq("conformity", "non_conforme")),
+    countLatestAudits((q) => q.eq("conformity", "erreur")),
   ]);
 
   return {
     total, with_email, with_site, scrape_pending, tested,
     status_non, status_part, status_tot, status_aucune, status_error,
     send_pool, contacted_today, contacted_total,
+    audit_done, audit_avg_score,
+    audit_conforme, audit_partiel, audit_non_conforme, audit_erreur,
   };
 }
 
@@ -90,6 +141,9 @@ export type MairieRow = {
   template_used: string | null;
   replied_at: string | null;
   bounced_at: string | null;
+  audit_score_pct: number | null;
+  audit_conformity: string | null;
+  audit_at: string | null;
 };
 
 export type SortKey =
@@ -144,5 +198,29 @@ export async function getMairies(f: Filters): Promise<{ rows: MairieRow[]; total
   const { data, count, error } = await q;
   if (error) throw error;
 
-  return { rows: (data as MairieRow[]) ?? [], total: count ?? 0, page, pageSize };
+  const baseRows = ((data as Omit<MairieRow, "audit_score_pct" | "audit_conformity" | "audit_at">[]) ?? [])
+    .map((r) => ({ ...r, audit_score_pct: null, audit_conformity: null, audit_at: null } as MairieRow));
+
+  if (baseRows.length > 0) {
+    const codes = baseRows.map((r) => r.code_insee);
+    const { data: auditData, error: auditErr } = await c
+      .from("mairie_latest_audit")
+      .select("code_insee,score_pct,conformity,audited_at")
+      .in("code_insee", codes);
+    if (auditErr) throw auditErr;
+    const byCode = new Map<string, { score_pct: number | null; conformity: string | null; audited_at: string | null }>();
+    for (const a of (auditData ?? []) as { code_insee: string; score_pct: number | null; conformity: string | null; audited_at: string | null }[]) {
+      byCode.set(a.code_insee, { score_pct: a.score_pct, conformity: a.conformity, audited_at: a.audited_at });
+    }
+    for (const r of baseRows) {
+      const a = byCode.get(r.code_insee);
+      if (a) {
+        r.audit_score_pct = a.score_pct;
+        r.audit_conformity = a.conformity;
+        r.audit_at = a.audited_at;
+      }
+    }
+  }
+
+  return { rows: baseRows, total: count ?? 0, page, pageSize };
 }
