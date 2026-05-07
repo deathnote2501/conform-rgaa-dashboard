@@ -148,10 +148,12 @@ export type MairieRow = {
 
 export type SortKey =
   | "code_insee" | "nom" | "email" | "site_url"
-  | "rgaa_status" | "contacted_at" | "template_used";
+  | "rgaa_status" | "rgaa_in_footer" | "rgaa_page_url"
+  | "contacted_at" | "template_used";
 export const SORT_KEYS: SortKey[] = [
   "code_insee", "nom", "email", "site_url",
-  "rgaa_status", "contacted_at", "template_used",
+  "rgaa_status", "rgaa_in_footer", "rgaa_page_url",
+  "contacted_at", "template_used",
 ];
 
 export type Filters = {

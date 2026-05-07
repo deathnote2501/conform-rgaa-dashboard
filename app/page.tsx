@@ -170,8 +170,8 @@ export default async function Page({ searchParams }: Props) {
                   <th><a className="sortable" href={sortHref("site_url")}><span>Site</span><SortIcon col="site_url" /></a></th>
                   <th><a className="sortable" href={sortHref("rgaa_status")}><span>RGAA</span><SortIcon col="rgaa_status" /></a></th>
                   <th><span className="th-static">Score</span></th>
-                  <th><span className="th-static">Footer</span></th>
-                  <th><span className="th-static">Page dédiée</span></th>
+                  <th><a className="sortable" href={sortHref("rgaa_in_footer")}><span>Footer</span><SortIcon col="rgaa_in_footer" /></a></th>
+                  <th><a className="sortable" href={sortHref("rgaa_page_url")}><span>Page dédiée</span><SortIcon col="rgaa_page_url" /></a></th>
                   <th><a className="sortable" href={sortHref("contacted_at")}><span>Envoyé</span><SortIcon col="contacted_at" /></a></th>
                   <th><a className="sortable" href={sortHref("template_used")}><span>Template</span><SortIcon col="template_used" /></a></th>
                 </tr>
