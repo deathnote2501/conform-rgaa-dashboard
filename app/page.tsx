@@ -3,7 +3,7 @@ import { ConformityPie, CoverageFunnel } from "@/components/charts";
 import {
   Database, Send, Activity, ShieldCheck, ExternalLink, Mail, Search,
   ChevronLeft, ChevronRight, ArrowUp, ArrowDown, ArrowUpDown, Globe, FileText,
-  AtSign, BadgeCheck, AlertTriangle, PieChart, BarChart3,
+  Check, Minus, AtSign, BadgeCheck, AlertTriangle, PieChart, BarChart3,
   Gauge, Award, ListChecks,
 } from "lucide-react";
 
@@ -164,6 +164,8 @@ export default async function Page({ searchParams }: Props) {
                   <th><span className="th-static">Conformité</span></th>
                   <th><span className="th-static">Score</span></th>
                   <th><span className="th-static">Audit</span></th>
+                  <th><a className="sortable" href={sortHref("rgaa_in_footer")}><span>Footer</span><SortIcon col="rgaa_in_footer" /></a></th>
+                  <th><a className="sortable" href={sortHref("rgaa_page_url")}><span>Page dédiée</span><SortIcon col="rgaa_page_url" /></a></th>
                   <th><a className="sortable" href={sortHref("contacted_at")}><span>Envoyé</span><SortIcon col="contacted_at" /></a></th>
                   <th><a className="sortable" href={sortHref("template_used")}><span>Template</span><SortIcon col="template_used" /></a></th>
                 </tr>
@@ -210,6 +212,22 @@ export default async function Page({ searchParams }: Props) {
                       {r.audit_url ? (
                         <a href={r.audit_url} target="_blank" rel="noopener noreferrer" className="link-cell">
                           <ExternalLink size={11} /><span className="truncate">rapport</span>
+                        </a>
+                      ) : <span className="dash">—</span>}
+                    </td>
+                    <td className="center-cell">
+                      {r.rgaa_in_footer === true ? (
+                        <Check size={14} className="check-yes" />
+                      ) : r.rgaa_in_footer === false ? (
+                        <Minus size={14} className="check-no" />
+                      ) : <span className="dash">—</span>}
+                    </td>
+                    <td>
+                      {r.rgaa_page_url ? (
+                        <a href={r.rgaa_page_url} target="_blank" rel="noopener noreferrer" className="link-cell">
+                          <Check size={12} className="check-yes" />
+                          <span className="truncate">{shortPath(r.rgaa_page_url)}</span>
+                          <ExternalLink size={11} />
                         </a>
                       ) : <span className="dash">—</span>}
                     </td>
@@ -260,6 +278,13 @@ function conformityBadgeClass(conformity: string | null): string {
 
 function shortHost(url: string): string {
   try { return new URL(url).host.replace(/^www\./, ""); } catch { return url.slice(0, 40); }
+}
+
+function shortPath(url: string): string {
+  try {
+    const u = new URL(url);
+    return (u.pathname.replace(/\/$/, "") || u.host.replace(/^www\./, "")).slice(0, 36);
+  } catch { return url.slice(0, 36); }
 }
 
 function cleanName(n: string): string {
