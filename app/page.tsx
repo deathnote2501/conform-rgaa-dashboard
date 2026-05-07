@@ -4,6 +4,7 @@ import {
   Database, Send, Activity, ShieldCheck, ExternalLink, Mail, Search,
   ChevronLeft, ChevronRight, ArrowUp, ArrowDown, ArrowUpDown, Globe, FileText,
   Check, Minus, AtSign, FlaskConical, BadgeCheck, AlertTriangle, PieChart, BarChart3,
+  Gauge, Award,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -96,24 +97,33 @@ export default async function Page({ searchParams }: Props) {
           </div>
           <CoverageFunnel
             total={kpis.total}
-            with_site={kpis.with_site}
-            tested={kpis.tested}
             with_email={kpis.with_email}
+            with_site={kpis.with_site}
+            audit_done={kpis.audit_done}
+            tested={kpis.tested}
             contacted_total={kpis.contacted_total}
           />
         </div>
       </div>
 
       <div className="kpi-grid">
+        {/* Volumes */}
         <Kpi color="muted"  icon={<Database size={20} />}      label="Mairies"        value={kpis.total}            sub={`${kpis.with_site.toLocaleString("fr-FR")} avec site`} />
         <Kpi color="blue"   icon={<AtSign size={20} />}        label="Emails"         value={kpis.with_email}       sub={`${pct(kpis.with_email, kpis.total)}% des mairies`} />
         <Kpi color="blue"   icon={<Globe size={20} />}         label="Sites web"      value={kpis.with_site}        sub={`${pct(kpis.with_site, kpis.total)}% des mairies`} />
-        <Kpi color="muted"  icon={<FlaskConical size={20} />}  label="Testées RGAA"   value={kpis.tested}           sub={`par rgaa-ia · ${pct(kpis.tested, kpis.with_site)}% des sites`} />
-        <Kpi color="green"  icon={<BadgeCheck size={20} />}    label="Conformes"      value={kpis.status_tot}       sub={`${pct(kpis.status_tot, kpis.tested)}% des testées`} />
-        <Kpi color="yellow" icon={<AlertTriangle size={20} />} label="Partiellement"  value={kpis.status_part}      sub={`${pct(kpis.status_part, kpis.tested)}% des testées`} />
-        <Kpi color="red"    icon={<Activity size={20} />}      label="Non conformes"  value={kpis.status_non}       sub={`${pct(kpis.status_non, kpis.tested)}% des testées`} />
-        <Kpi color="muted"  icon={<FlaskConical size={20} />}  label="Audités 44 crit." value={kpis.audit_done}     sub={`${pct(kpis.audit_done, kpis.with_site)}% des sites`} />
-        <Kpi color={scoreColor(kpis.audit_avg_score)} icon={<BadgeCheck size={20} />} label="Score moyen" value={kpis.audit_avg_score} suffix="%" sub={`conf=${kpis.audit_conforme} part=${kpis.audit_partiel} nc=${kpis.audit_non_conforme}`} />
+
+        {/* Mention légale RGAA (rgaa-ia) — somme des 4 status = kpis.tested */}
+        <Kpi color="muted"  icon={<FlaskConical size={20} />}  label="Testées mention" value={kpis.tested}          sub={`par rgaa-ia · ${pct(kpis.tested, kpis.with_site)}% des sites`} />
+        <Kpi color="green"  icon={<BadgeCheck size={20} />}    label="Mention totale"  value={kpis.status_tot}      sub={`${pct(kpis.status_tot, kpis.tested)}% des testées`} />
+        <Kpi color="yellow" icon={<AlertTriangle size={20} />} label="Mention partielle" value={kpis.status_part}   sub={`${pct(kpis.status_part, kpis.tested)}% des testées`} />
+        <Kpi color="red"    icon={<Activity size={20} />}      label="Mention non conf." value={kpis.status_non}    sub={`${pct(kpis.status_non, kpis.tested)}% des testées`} />
+        <Kpi color="muted"  icon={<Minus size={20} />}         label="Aucune mention"  value={kpis.status_aucune}   sub={`${pct(kpis.status_aucune, kpis.tested)}% des testées`} />
+
+        {/* Audit technique 44 critères (Playwright + axe-core) */}
+        <Kpi color="muted"  icon={<Gauge size={20} />}         label="Audités 44 crit." value={kpis.audit_done}     sub={`par axe-core · ${pct(kpis.audit_done, kpis.with_site)}% des sites`} />
+        <Kpi color={scoreColor(kpis.audit_avg_score)} icon={<Award size={20} />} label="Score 44 crit. moyen" value={kpis.audit_avg_score} suffix="%" sub={`${kpis.audit_conforme} conf · ${kpis.audit_partiel} part · ${kpis.audit_non_conforme} NC`} />
+
+        {/* Contact */}
         <Kpi color="yellow" icon={<FileText size={20} />}      label="Pool envoi"     value={kpis.send_pool}        sub="non_conforme + partiellement, non contactés" />
         <Kpi color="green"  icon={<Send size={20} />}          label="Envoyés"        value={kpis.contacted_total}  sub={`aujourd'hui : ${kpis.contacted_today}/10`} />
       </div>

@@ -88,21 +88,22 @@ export function RgaaPie({
 }
 
 export function CoverageFunnel({
-  total, with_site, tested, with_email, contacted_total,
+  total, with_email, with_site, audit_done, tested, contacted_total,
 }: {
-  total: number; with_site: number; tested: number;
-  with_email: number; contacted_total: number;
+  total: number; with_email: number; with_site: number;
+  audit_done: number; tested: number; contacted_total: number;
 }) {
   const data: FunnelStep[] = [
-    { name: "Mairies",   value: total },
-    { name: "Avec site", value: with_site },
-    { name: "Testées",   value: tested },
-    { name: "Avec email", value: with_email },
-    { name: "Contactées", value: contacted_total },
+    { name: "Mairies",        value: total },
+    { name: "Avec email",     value: with_email },
+    { name: "Avec site",      value: with_site },
+    { name: "Audités 44",     value: audit_done },
+    { name: "Testées mention", value: tested },
+    { name: "Contactées",     value: contacted_total },
   ];
 
   return (
-    <ResponsiveContainer width="100%" height={220}>
+    <ResponsiveContainer width="100%" height={250}>
       <BarChart data={data} layout="vertical" margin={{ top: 8, right: 56, left: 12, bottom: 8 }}>
         <CartesianGrid horizontal={false} stroke="#f1f3f5" />
         <XAxis type="number" hide />
@@ -112,7 +113,7 @@ export function CoverageFunnel({
           axisLine={false}
           tickLine={false}
           tick={{ fontSize: 12, fill: "#6b7280" }}
-          width={90}
+          width={108}
         />
         <Tooltip
           formatter={(value) => {
