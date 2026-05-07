@@ -1,8 +1,9 @@
 import { getKpis, getMairies, SORT_KEYS, type SortKey } from "@/lib/db";
+import { RgaaPie, CoverageFunnel } from "@/components/charts";
 import {
   Database, Send, Activity, ShieldCheck, ExternalLink, Mail, Search,
   ChevronLeft, ChevronRight, ArrowUp, ArrowDown, ArrowUpDown, Globe, FileText,
-  Check, Minus,
+  Check, Minus, AtSign, FlaskConical, BadgeCheck, AlertTriangle, PieChart, BarChart3,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -74,11 +75,45 @@ export default async function Page({ searchParams }: Props) {
         </span>
       </div>
 
+      <div className="charts-grid">
+        <div className="panel chart-panel">
+          <div className="panel-title">
+            <span className="left"><PieChart size={16} /> Répartition RGAA</span>
+            <span className="meta-mini">{kpis.tested.toLocaleString("fr-FR")} mairies testées</span>
+          </div>
+          <RgaaPie
+            status_non={kpis.status_non}
+            status_part={kpis.status_part}
+            status_tot={kpis.status_tot}
+            status_aucune={kpis.status_aucune}
+            status_error={kpis.status_error}
+          />
+        </div>
+        <div className="panel chart-panel">
+          <div className="panel-title">
+            <span className="left"><BarChart3 size={16} /> Couverture</span>
+            <span className="meta-mini">de la base au contact</span>
+          </div>
+          <CoverageFunnel
+            total={kpis.total}
+            with_site={kpis.with_site}
+            tested={kpis.tested}
+            with_email={kpis.with_email}
+            contacted_total={kpis.contacted_total}
+          />
+        </div>
+      </div>
+
       <div className="kpi-grid">
-        <Kpi color="muted"  icon={<Database size={20} />}     label="Mairies"        value={kpis.total}            sub={`${kpis.with_email.toLocaleString("fr-FR")} avec email · ${kpis.with_site.toLocaleString("fr-FR")} avec site`} />
-        <Kpi color="blue"   icon={<Activity size={20} />}     label="Scrape pending" value={kpis.scrape_pending}   sub={`non / part / tot : ${kpis.status_non} / ${kpis.status_part} / ${kpis.status_tot}`} />
-        <Kpi color="yellow" icon={<FileText size={20} />}     label="Pool envoi"     value={kpis.send_pool}        sub="non_conforme + partiellement, non contactés" />
-        <Kpi color="green"  icon={<Send size={20} />}         label="Envoyés"        value={kpis.contacted_total}  sub={`aujourd'hui : ${kpis.contacted_today}/10`} />
+        <Kpi color="muted"  icon={<Database size={20} />}      label="Mairies"        value={kpis.total}            sub={`${kpis.with_site.toLocaleString("fr-FR")} avec site`} />
+        <Kpi color="blue"   icon={<AtSign size={20} />}        label="Emails"         value={kpis.with_email}       sub={`${pct(kpis.with_email, kpis.total)}% des mairies`} />
+        <Kpi color="blue"   icon={<Globe size={20} />}         label="Sites web"      value={kpis.with_site}        sub={`${pct(kpis.with_site, kpis.total)}% des mairies`} />
+        <Kpi color="muted"  icon={<FlaskConical size={20} />}  label="Testées RGAA"   value={kpis.tested}           sub={`par rgaa-ia · ${pct(kpis.tested, kpis.with_site)}% des sites`} />
+        <Kpi color="green"  icon={<BadgeCheck size={20} />}    label="Conformes"      value={kpis.status_tot}       sub={`${pct(kpis.status_tot, kpis.tested)}% des testées`} />
+        <Kpi color="yellow" icon={<AlertTriangle size={20} />} label="Partiellement"  value={kpis.status_part}      sub={`${pct(kpis.status_part, kpis.tested)}% des testées`} />
+        <Kpi color="red"    icon={<Activity size={20} />}      label="Non conformes"  value={kpis.status_non}       sub={`${pct(kpis.status_non, kpis.tested)}% des testées`} />
+        <Kpi color="yellow" icon={<FileText size={20} />}      label="Pool envoi"     value={kpis.send_pool}        sub="non_conforme + partiellement, non contactés" />
+        <Kpi color="green"  icon={<Send size={20} />}          label="Envoyés"        value={kpis.contacted_total}  sub={`aujourd'hui : ${kpis.contacted_today}/10`} />
       </div>
 
       <form className="panel filters" action="/" method="get">
@@ -196,6 +231,11 @@ export default async function Page({ searchParams }: Props) {
       </div>
     </main>
   );
+}
+
+function pct(part: number, whole: number): string {
+  if (!whole) return "0";
+  return ((part / whole) * 100).toFixed(1);
 }
 
 function shortHost(url: string): string {

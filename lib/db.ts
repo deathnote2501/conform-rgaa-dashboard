@@ -28,6 +28,7 @@ export type Kpis = {
   with_email: number;
   with_site: number;
   scrape_pending: number;
+  tested: number;
   status_non: number;
   status_part: number;
   status_tot: number;
@@ -46,7 +47,7 @@ export async function getKpis(): Promise<Kpis> {
   )).toISOString();
 
   const [
-    total, with_email, with_site, scrape_pending,
+    total, with_email, with_site, scrape_pending, tested,
     status_non, status_part, status_tot, status_aucune, status_error,
     send_pool, contacted_today, contacted_total,
   ] = await Promise.all([
@@ -54,6 +55,7 @@ export async function getKpis(): Promise<Kpis> {
     countMairies((q) => q.not("email", "is", null)),
     countMairies((q) => q.not("site_url", "is", null)),
     countMairies((q) => q.not("site_url", "is", null).is("scraped_rgaa_at", null)),
+    countMairies((q) => q.not("scraped_rgaa_at", "is", null)),
     countMairies((q) => q.eq("rgaa_status", "non_conforme")),
     countMairies((q) => q.eq("rgaa_status", "partiellement")),
     countMairies((q) => q.eq("rgaa_status", "totalement")),
@@ -70,7 +72,7 @@ export async function getKpis(): Promise<Kpis> {
   ]);
 
   return {
-    total, with_email, with_site, scrape_pending,
+    total, with_email, with_site, scrape_pending, tested,
     status_non, status_part, status_tot, status_aucune, status_error,
     send_pool, contacted_today, contacted_total,
   };
