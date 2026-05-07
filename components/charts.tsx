@@ -14,27 +14,26 @@ const COLORS = {
   redSoft: "#fca5a5",
 };
 
-type RgaaSlice = { name: string; value: number; color: string };
+type ConformitySlice = { name: string; value: number; color: string };
 type FunnelStep = { name: string; value: number };
 
-export function RgaaPie({
-  status_non, status_part, status_tot, status_aucune, status_error,
+export function ConformityPie({
+  audit_conforme, audit_partiel, audit_non_conforme, audit_erreur,
 }: {
-  status_non: number; status_part: number; status_tot: number;
-  status_aucune: number; status_error: number;
+  audit_conforme: number; audit_partiel: number;
+  audit_non_conforme: number; audit_erreur: number;
 }) {
-  const data: RgaaSlice[] = [
-    { name: "Non conforme",  value: status_non,    color: COLORS.red },
-    { name: "Partiellement", value: status_part,   color: COLORS.yellow },
-    { name: "Totalement",    value: status_tot,    color: COLORS.green },
-    { name: "Aucune mention", value: status_aucune, color: COLORS.muted },
-    { name: "Fetch error",   value: status_error,  color: COLORS.redSoft },
+  const data: ConformitySlice[] = [
+    { name: "Conforme",     value: audit_conforme,     color: COLORS.green },
+    { name: "Partiel",      value: audit_partiel,      color: COLORS.yellow },
+    { name: "Non conforme", value: audit_non_conforme, color: COLORS.red },
+    { name: "Erreur",       value: audit_erreur,       color: COLORS.muted },
   ].filter((d) => d.value > 0);
 
   const total = data.reduce((s, d) => s + d.value, 0);
 
   if (total === 0) {
-    return <div className="chart-empty">Aucune donnée RGAA pour l&apos;instant.</div>;
+    return <div className="chart-empty">Aucun audit pour l&apos;instant.</div>;
   }
 
   return (
@@ -88,18 +87,17 @@ export function RgaaPie({
 }
 
 export function CoverageFunnel({
-  total, with_email, with_site, audit_done, tested, contacted_total,
+  total, with_email, with_site, audit_done, contacted_total,
 }: {
   total: number; with_email: number; with_site: number;
-  audit_done: number; tested: number; contacted_total: number;
+  audit_done: number; contacted_total: number;
 }) {
   const data: FunnelStep[] = [
-    { name: "Mairies",        value: total },
-    { name: "Avec email",     value: with_email },
-    { name: "Avec site",      value: with_site },
-    { name: "Audités 44",     value: audit_done },
-    { name: "Testées mention", value: tested },
-    { name: "Contactées",     value: contacted_total },
+    { name: "Mairies",    value: total },
+    { name: "Avec email", value: with_email },
+    { name: "Avec site",  value: with_site },
+    { name: "Auditées",   value: audit_done },
+    { name: "Contactées", value: contacted_total },
   ];
 
   return (

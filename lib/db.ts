@@ -37,9 +37,6 @@ async function avgLatestAuditScore(): Promise<number> {
   let from = 0;
   let sum = 0;
   let n = 0;
-  // Paginate through mairie_latest_audit, summing score_pct (skip nulls).
-  // The view holds at most ~21k rows (1 per audited mairie), so this is bounded.
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     const { data, error } = await c
       .from("mairie_latest_audit")
@@ -62,22 +59,16 @@ export type Kpis = {
   total: number;
   with_email: number;
   with_site: number;
-  scrape_pending: number;
-  tested: number;
-  status_non: number;
-  status_part: number;
-  status_tot: number;
-  status_aucune: number;
-  status_error: number;
-  send_pool: number;
-  contacted_today: number;
-  contacted_total: number;
   audit_done: number;
+  audit_pending: number;
   audit_avg_score: number;
   audit_conforme: number;
   audit_partiel: number;
   audit_non_conforme: number;
   audit_erreur: number;
+  send_pool: number;
+  contacted_today: number;
+  contacted_total: number;
 };
 
 export async function getKpis(): Promise<Kpis> {
@@ -88,45 +79,60 @@ export async function getKpis(): Promise<Kpis> {
   )).toISOString();
 
   const [
-    total, with_email, with_site, scrape_pending, tested,
-    status_non, status_part, status_tot, status_aucune, status_error,
-    send_pool, contacted_today, contacted_total,
+    total, with_email, with_site,
     audit_done, audit_avg_score,
     audit_conforme, audit_partiel, audit_non_conforme, audit_erreur,
+    contacted_today, contacted_total,
   ] = await Promise.all([
     countMairies(),
     countMairies((q) => q.not("email", "is", null)),
     countMairies((q) => q.not("site_url", "is", null)),
-    countMairies((q) => q.not("site_url", "is", null).is("scraped_rgaa_at", null)),
-    countMairies((q) => q.not("scraped_rgaa_at", "is", null)),
-    countMairies((q) => q.eq("rgaa_status", "non_conforme")),
-    countMairies((q) => q.eq("rgaa_status", "partiellement")),
-    countMairies((q) => q.eq("rgaa_status", "totalement")),
-    countMairies((q) => q.eq("rgaa_status", "aucune_mention")),
-    countMairies((q) => q.eq("rgaa_status", "fetch_error")),
-    countMairies((q) =>
-      q.not("email", "is", null)
-       .in("rgaa_status", ["non_conforme", "partiellement"])
-       .is("contacted_at", null)
-       .is("unsubscribed_at", null)
-    ),
-    countMairies((q) => q.gte("contacted_at", todayUtc)),
-    countMairies((q) => q.not("contacted_at", "is", null)),
     countLatestAudits((q) => q.not("score_pct", "is", null)),
     avgLatestAuditScore(),
     countLatestAudits((q) => q.eq("conformity", "conforme")),
     countLatestAudits((q) => q.eq("conformity", "partiel")),
     countLatestAudits((q) => q.eq("conformity", "non_conforme")),
     countLatestAudits((q) => q.eq("conformity", "erreur")),
+    countMairies((q) => q.gte("contacted_at", todayUtc)),
+    countMairies((q) => q.not("contacted_at", "is", null)),
   ]);
 
+  // send_pool : mairies non_conforme (audit rgaa-ia.fr) avec email, jamais contactées.
+  // Pas de NOT IN trivial côté PostgREST → on calcule à partir des comptages au-dessus
+  // après avoir récupéré la liste des code_insee non_conforme + uncontacted via une jointure côté client.
+  const send_pool = await computeSendPool();
+
+  const audit_pending = Math.max(0, with_site - audit_done);
+
   return {
-    total, with_email, with_site, scrape_pending, tested,
-    status_non, status_part, status_tot, status_aucune, status_error,
-    send_pool, contacted_today, contacted_total,
-    audit_done, audit_avg_score,
+    total, with_email, with_site,
+    audit_done, audit_pending, audit_avg_score,
     audit_conforme, audit_partiel, audit_non_conforme, audit_erreur,
+    send_pool, contacted_today, contacted_total,
   };
+}
+
+async function computeSendPool(): Promise<number> {
+  const c = client();
+  // Liste des code_insee non_conforme par rgaa-ia.fr
+  const { data: ncCodes, error: ncErr } = await c
+    .from("mairie_latest_audit")
+    .select("code_insee")
+    .eq("conformity", "non_conforme")
+    .is("error_reason", null);
+  if (ncErr) throw ncErr;
+  const codes = (ncCodes ?? []).map((r: { code_insee: string }) => r.code_insee);
+  if (codes.length === 0) return 0;
+  // Filtre : email non null + non contactée + non désinscrite
+  const { count, error } = await c
+    .from("mairies")
+    .select("*", { count: "exact", head: true })
+    .in("code_insee", codes)
+    .not("email", "is", null)
+    .is("contacted_at", null)
+    .is("unsubscribed_at", null);
+  if (error) throw error;
+  return count ?? 0;
 }
 
 export type MairieRow = {
@@ -134,9 +140,6 @@ export type MairieRow = {
   nom: string;
   email: string | null;
   site_url: string | null;
-  rgaa_status: string | null;
-  rgaa_page_url: string | null;
-  rgaa_in_footer: boolean | null;
   contacted_at: string | null;
   template_used: string | null;
   replied_at: string | null;
@@ -144,21 +147,20 @@ export type MairieRow = {
   audit_score_pct: number | null;
   audit_conformity: string | null;
   audit_at: string | null;
+  audit_url: string | null;
 };
 
 export type SortKey =
   | "code_insee" | "nom" | "email" | "site_url"
-  | "rgaa_status" | "rgaa_in_footer" | "rgaa_page_url"
   | "contacted_at" | "template_used";
 export const SORT_KEYS: SortKey[] = [
   "code_insee", "nom", "email", "site_url",
-  "rgaa_status", "rgaa_in_footer", "rgaa_page_url",
   "contacted_at", "template_used",
 ];
 
 export type Filters = {
   search?: string;
-  rgaa?: string;
+  conformity?: string;
   contacted?: string;
   sort?: SortKey;
   dir?: "asc" | "desc";
@@ -166,7 +168,7 @@ export type Filters = {
   pageSize?: number;
 };
 
-const COLUMNS = "code_insee,nom,email,site_url,rgaa_status,rgaa_page_url,rgaa_in_footer,contacted_at,template_used,replied_at,bounced_at";
+const COLUMNS = "code_insee,nom,email,site_url,contacted_at,template_used,replied_at,bounced_at";
 
 export async function getMairies(f: Filters): Promise<{ rows: MairieRow[]; total: number; page: number; pageSize: number }> {
   const c = client();
@@ -176,22 +178,36 @@ export async function getMairies(f: Filters): Promise<{ rows: MairieRow[]; total
   const to = from + pageSize - 1;
 
   const search = (f.search ?? "").trim();
-  const rgaa = ["non_conforme", "partiellement", "totalement", "aucune_mention", "fetch_error"].includes(f.rgaa ?? "")
-    ? f.rgaa! : null;
+  const conformity = ["conforme", "partiel", "non_conforme", "erreur"].includes(f.conformity ?? "")
+    ? f.conformity! : null;
   const contacted = f.contacted === "yes" ? "yes" : f.contacted === "no" ? "no" : null;
   const sort: SortKey = SORT_KEYS.includes(f.sort as SortKey) ? (f.sort as SortKey) : "code_insee";
   const dir: "asc" | "desc" = f.dir === "desc" ? "desc" : "asc";
+
+  // Si filtre sur conformity, on pré-récupère les code_insee correspondants
+  // (jointure côté client puisque l'audit vit dans une vue séparée).
+  let conformityCodes: string[] | null = null;
+  if (conformity) {
+    const { data, error } = await c
+      .from("mairie_latest_audit")
+      .select("code_insee")
+      .eq("conformity", conformity);
+    if (error) throw error;
+    conformityCodes = (data ?? []).map((r: { code_insee: string }) => r.code_insee);
+    // Si liste vide, court-circuit : aucun résultat possible
+    if (conformityCodes.length === 0) {
+      return { rows: [], total: 0, page, pageSize };
+    }
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let q: any = c.from("mairies").select(COLUMNS, { count: "exact" });
 
   if (search) {
-    // PostgREST `or` syntax — escape commas in user input by replacing with %2C is not needed for ilike values
-    // but we do need to ensure the value doesn't contain commas/parens which terminate the or() argument.
     const safe = search.replace(/[,()*]/g, " ");
     q = q.or(`nom.ilike.%${safe}%,code_insee.eq.${safe},email.ilike.%${safe}%`);
   }
-  if (rgaa) q = q.eq("rgaa_status", rgaa);
+  if (conformityCodes) q = q.in("code_insee", conformityCodes);
   if (contacted === "yes") q = q.not("contacted_at", "is", null);
   if (contacted === "no")  q = q.is("contacted_at", null);
 
@@ -200,19 +216,19 @@ export async function getMairies(f: Filters): Promise<{ rows: MairieRow[]; total
   const { data, count, error } = await q;
   if (error) throw error;
 
-  const baseRows = ((data as Omit<MairieRow, "audit_score_pct" | "audit_conformity" | "audit_at">[]) ?? [])
-    .map((r) => ({ ...r, audit_score_pct: null, audit_conformity: null, audit_at: null } as MairieRow));
+  const baseRows = ((data as Omit<MairieRow, "audit_score_pct" | "audit_conformity" | "audit_at" | "audit_url">[]) ?? [])
+    .map((r) => ({ ...r, audit_score_pct: null, audit_conformity: null, audit_at: null, audit_url: null } as MairieRow));
 
   if (baseRows.length > 0) {
     const codes = baseRows.map((r) => r.code_insee);
     const { data: auditData, error: auditErr } = await c
       .from("mairie_latest_audit")
-      .select("code_insee,score_pct,conformity,audited_at")
+      .select("code_insee,score_pct,conformity,audited_at,audit_url")
       .in("code_insee", codes);
     if (auditErr) throw auditErr;
-    const byCode = new Map<string, { score_pct: number | null; conformity: string | null; audited_at: string | null }>();
-    for (const a of (auditData ?? []) as { code_insee: string; score_pct: number | null; conformity: string | null; audited_at: string | null }[]) {
-      byCode.set(a.code_insee, { score_pct: a.score_pct, conformity: a.conformity, audited_at: a.audited_at });
+    const byCode = new Map<string, { score_pct: number | null; conformity: string | null; audited_at: string | null; audit_url: string | null }>();
+    for (const a of (auditData ?? []) as { code_insee: string; score_pct: number | null; conformity: string | null; audited_at: string | null; audit_url: string | null }[]) {
+      byCode.set(a.code_insee, { score_pct: a.score_pct, conformity: a.conformity, audited_at: a.audited_at, audit_url: a.audit_url });
     }
     for (const r of baseRows) {
       const a = byCode.get(r.code_insee);
@@ -220,6 +236,7 @@ export async function getMairies(f: Filters): Promise<{ rows: MairieRow[]; total
         r.audit_score_pct = a.score_pct;
         r.audit_conformity = a.conformity;
         r.audit_at = a.audited_at;
+        r.audit_url = a.audit_url;
       }
     }
   }
