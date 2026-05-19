@@ -1,5 +1,5 @@
-import { getKpis, getMairies, SORT_KEYS, type SortKey } from "@/lib/db";
-import { ConformityPie, CoverageFunnel } from "@/components/charts";
+import { getKpis, getMairies, getTimeline, SORT_KEYS, type SortKey } from "@/lib/db";
+import { ConformityPie, CoverageFunnel, EmailTimeline } from "@/components/charts";
 import {
   Database, Send, Activity, ShieldCheck, ExternalLink, Mail, Search,
   ChevronLeft, ChevronRight, ArrowUp, ArrowDown, ArrowUpDown, Globe, FileText,
@@ -33,9 +33,10 @@ export default async function Page({ searchParams }: Props) {
   const sort: SortKey = SORT_KEYS.includes(sp.sort as SortKey) ? (sp.sort as SortKey) : "code_insee";
   const dir: "asc" | "desc" = sp.dir === "desc" ? "desc" : "asc";
 
-  const [kpis, { rows, total }] = await Promise.all([
+  const [kpis, { rows, total }, timeline] = await Promise.all([
     getKpis(),
     getMairies({ search, conformity, contacted, sort, dir, page, pageSize }),
+    getTimeline(30),
   ]);
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
@@ -103,6 +104,14 @@ export default async function Page({ searchParams }: Props) {
         </div>
       </div>
 
+      <div className="panel chart-panel" style={{ marginBottom: 16 }}>
+        <div className="panel-title">
+          <span className="left"><BarChart3 size={16} /> Timeline envois · 30 jours</span>
+          <span className="meta-mini">envois, clics, réponses, bounces (par jour UTC)</span>
+        </div>
+        <EmailTimeline data={timeline} />
+      </div>
+
       <div className="kpi-grid">
         {/* Volumes */}
         <Kpi color="muted"  icon={<Database size={20} />}  label="Mairies"   value={kpis.total}      sub={`${kpis.with_site.toLocaleString("fr-FR")} avec site`} />
@@ -160,13 +169,13 @@ export default async function Page({ searchParams }: Props) {
                   <th><a className="sortable" href={sortHref("code_insee")}><span>INSEE</span><SortIcon col="code_insee" /></a></th>
                   <th><a className="sortable" href={sortHref("nom")}><span>Mairie</span><SortIcon col="nom" /></a></th>
                   <th><a className="sortable" href={sortHref("email")}><span>Email</span><SortIcon col="email" /></a></th>
+                  <th><a className="sortable" href={sortHref("contacted_at")}><span>Envoyé</span><SortIcon col="contacted_at" /></a></th>
                   <th><a className="sortable" href={sortHref("site_url")}><span>Site</span><SortIcon col="site_url" /></a></th>
                   <th><span className="th-static">Conformité</span></th>
                   <th><span className="th-static">Score</span></th>
                   <th><span className="th-static">Audit</span></th>
                   <th><a className="sortable" href={sortHref("rgaa_in_footer")}><span>Footer</span><SortIcon col="rgaa_in_footer" /></a></th>
                   <th><a className="sortable" href={sortHref("rgaa_page_url")}><span>Page dédiée</span><SortIcon col="rgaa_page_url" /></a></th>
-                  <th><a className="sortable" href={sortHref("contacted_at")}><span>Envoyé</span><SortIcon col="contacted_at" /></a></th>
                   <th><a className="sortable" href={sortHref("template_used")}><span>Template</span><SortIcon col="template_used" /></a></th>
                 </tr>
               </thead>
@@ -180,6 +189,11 @@ export default async function Page({ searchParams }: Props) {
                         <a href={`mailto:${r.email}`} className="link-cell">
                           <Mail size={11} /><span className="truncate">{r.email}</span>
                         </a>
+                      ) : <span className="dash">—</span>}
+                    </td>
+                    <td>
+                      {r.contacted_at ? (
+                        <span className="mono nowrap">{new Date(r.contacted_at).toISOString().slice(0, 10)}</span>
                       ) : <span className="dash">—</span>}
                     </td>
                     <td>
@@ -231,12 +245,13 @@ export default async function Page({ searchParams }: Props) {
                         </a>
                       ) : <span className="dash">—</span>}
                     </td>
-                    <td>
+                    <td className="muted-cell">
                       {r.contacted_at ? (
-                        <span className="mono">{new Date(r.contacted_at).toISOString().slice(0, 16).replace("T", " ")}</span>
-                      ) : <span className="dash">—</span>}
+                        <a href={`/email/${r.code_insee}`} className="link-cell" title="Voir l'email envoyé">
+                          <Mail size={11} /><span className="truncate">{r.template_used ? templateLabel(r.template_used) : "voir"}</span>
+                        </a>
+                      ) : r.template_used ? templateLabel(r.template_used) : <span className="dash">—</span>}
                     </td>
-                    <td className="muted-cell">{r.template_used ?? <span className="dash">—</span>}</td>
                   </tr>
                 ))}
               </tbody>
@@ -289,6 +304,12 @@ function shortPath(url: string): string {
 
 function cleanName(n: string): string {
   return n.replace(/^Mairie(?:\s+d[ée]l[ée]gu[ée]e?)?\s*-\s*/i, "");
+}
+
+function templateLabel(t: string): string {
+  if (t.includes("non_conforme")) return "non conforme";
+  if (t.includes("partiel")) return "partiel";
+  return t;
 }
 
 function Kpi({ icon, label, value, sub, color, suffix }: {

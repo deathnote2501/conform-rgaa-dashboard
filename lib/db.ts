@@ -135,6 +135,76 @@ async function computeSendPool(): Promise<number> {
   return count ?? 0;
 }
 
+export type TimelineBucket = {
+  day: string;
+  sent: number;
+  replied: number;
+  bounced: number;
+  clicked: number;
+};
+
+export async function getTimeline(days = 30): Promise<TimelineBucket[]> {
+  const c = client();
+  const start = new Date();
+  start.setUTCDate(start.getUTCDate() - (days - 1));
+  start.setUTCHours(0, 0, 0, 0);
+  const startIso = start.toISOString();
+
+  const map = new Map<string, TimelineBucket>();
+  for (let i = 0; i < days; i++) {
+    const d = new Date(start);
+    d.setUTCDate(d.getUTCDate() + i);
+    const day = d.toISOString().slice(0, 10);
+    map.set(day, { day, sent: 0, replied: 0, bounced: 0, clicked: 0 });
+  }
+
+  async function paginate<T>(
+    table: string,
+    select: string,
+    field: string,
+    filter?: (q: any) => any, // eslint-disable-line @typescript-eslint/no-explicit-any
+  ): Promise<T[]> {
+    const PAGE = 1000;
+    const out: T[] = [];
+    let from = 0;
+    while (true) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let q: any = c.from(table).select(select).gte(field, startIso).range(from, from + PAGE - 1);
+      if (filter) q = filter(q);
+      const { data, error } = await q;
+      if (error) throw error;
+      const rows = (data as T[]) ?? [];
+      out.push(...rows);
+      if (rows.length < PAGE) break;
+      from += PAGE;
+    }
+    return out;
+  }
+
+  const [sentRows, repliedRows, bouncedRows, clickedRows] = await Promise.all([
+    paginate<{ contacted_at: string }>("mairies", "contacted_at", "contacted_at",
+      (q) => q.not("contacted_at", "is", null)),
+    paginate<{ replied_at: string }>("mairies", "replied_at", "replied_at",
+      (q) => q.not("replied_at", "is", null)),
+    paginate<{ bounced_at: string }>("mairies", "bounced_at", "bounced_at",
+      (q) => q.not("bounced_at", "is", null)),
+    paginate<{ occurred_at: string }>("email_events", "occurred_at,event_type,email", "occurred_at",
+      (q) => q.eq("event_type", "clicked")),
+  ]);
+
+  const bump = (iso: string, key: keyof Omit<TimelineBucket, "day">) => {
+    const day = iso.slice(0, 10);
+    const b = map.get(day);
+    if (b) b[key] += 1;
+  };
+  for (const r of sentRows) bump(r.contacted_at, "sent");
+  for (const r of repliedRows) bump(r.replied_at, "replied");
+  for (const r of bouncedRows) bump(r.bounced_at, "bounced");
+  for (const r of clickedRows) bump(r.occurred_at, "clicked");
+
+  return Array.from(map.values());
+}
+
 export type MairieRow = {
   code_insee: string;
   nom: string;
@@ -173,6 +243,29 @@ export type Filters = {
 };
 
 const COLUMNS = "code_insee,nom,email,site_url,rgaa_in_footer,rgaa_page_url,contacted_at,template_used,replied_at,bounced_at";
+
+export async function getMairieByCode(codeInsee: string): Promise<MairieRow | null> {
+  const c = client();
+  const { data, error } = await c.from("mairies").select(COLUMNS).eq("code_insee", codeInsee).maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  const row = { ...(data as Omit<MairieRow, "audit_score_pct" | "audit_conformity" | "audit_at" | "audit_url">),
+    audit_score_pct: null, audit_conformity: null, audit_at: null, audit_url: null } as MairieRow;
+  const { data: auditData, error: auditErr } = await c
+    .from("mairie_latest_audit")
+    .select("score_pct,conformity,audited_at,audit_url")
+    .eq("code_insee", codeInsee)
+    .maybeSingle();
+  if (auditErr) throw auditErr;
+  if (auditData) {
+    const a = auditData as { score_pct: number | null; conformity: string | null; audited_at: string | null; audit_url: string | null };
+    row.audit_score_pct = a.score_pct;
+    row.audit_conformity = a.conformity;
+    row.audit_at = a.audited_at;
+    row.audit_url = a.audit_url;
+  }
+  return row;
+}
 
 export async function getMairies(f: Filters): Promise<{ rows: MairieRow[]; total: number; page: number; pageSize: number }> {
   const c = client();

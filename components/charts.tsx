@@ -1,9 +1,10 @@
 "use client";
 
 import {
-  PieChart, Pie, Cell, ResponsiveContainer, Tooltip,
+  PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, LabelList,
 } from "recharts";
+import type { TimelineBucket } from "@/lib/db";
 
 const COLORS = {
   blue: "#4285F4",
@@ -83,6 +84,32 @@ export function ConformityPie({
         ))}
       </ul>
     </div>
+  );
+}
+
+export function EmailTimeline({ data }: { data: TimelineBucket[] }) {
+  const fmt = (raw: string) => (typeof raw === "string" ? raw.slice(5) : ""); // MM-DD
+  const total = data.reduce((s, d) => s + d.sent + d.replied + d.bounced + d.clicked, 0);
+  if (total === 0) {
+    return <div className="chart-empty">Aucun envoi sur les 30 derniers jours.</div>;
+  }
+  return (
+    <ResponsiveContainer width="100%" height={260}>
+      <BarChart data={data} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+        <CartesianGrid stroke="#e5e7eb" strokeDasharray="3 3" vertical={false} />
+        <XAxis dataKey="day" tickFormatter={fmt} stroke="#6b7280" fontSize={11} />
+        <YAxis allowDecimals={false} stroke="#6b7280" fontSize={11} />
+        <Tooltip
+          contentStyle={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12 }}
+          labelFormatter={(label) => fmt(String(label))}
+        />
+        <Legend wrapperStyle={{ fontSize: 12 }} />
+        <Bar dataKey="sent"    stackId="a" fill={COLORS.blue}   name="Envoyés" />
+        <Bar dataKey="clicked" stackId="a" fill="#a78bfa"        name="Clics" />
+        <Bar dataKey="replied" stackId="a" fill={COLORS.yellow} name="Réponses" />
+        <Bar dataKey="bounced" stackId="a" fill={COLORS.red}    name="Bounces" />
+      </BarChart>
+    </ResponsiveContainer>
   );
 }
 
